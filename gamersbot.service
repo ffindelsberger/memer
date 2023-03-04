@@ -1,0 +1,13 @@
+[Unit]
+Description=Gamers Bot Service
+After=network.target
+
+[Service]
+ExecStart=/opt/gamersbot/gamers_bot
+User=root
+Group=root
+Restart=always
+Type=simple
+
+[Install]
+WantedBy=multi-user.target

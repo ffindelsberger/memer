@@ -1,10 +1,11 @@
-use serenity::model::channel::Message;
 use std::error::Error;
 use std::path::PathBuf;
 use std::process::Command;
 
+use serenity::model::channel::Message;
+
 //We are allocating a dynamic PathBuf on the Heap, we could use lifetimes to use a Path Object on the stack instead
-pub fn load(url: &str, msg: &Message) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
+pub fn _load(url: &str, msg: &Message) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
     //Download the File from youtube using this python program and save the file with the msg id as filename
     let filename = msg.id.to_string();
     let filename = filename.trim();
