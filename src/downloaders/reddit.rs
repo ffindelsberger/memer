@@ -1,19 +1,22 @@
-use std::env::temp_dir;
+use std::any::Any;
 use std::fs;
-use std::fs::{canonicalize, File};
+use std::fs::File;
 use std::io::Write;
 use std::ops::Add;
 use std::path::PathBuf;
-use std::process::Command;
 
+use image::io::Reader as ImageReader;
+use image::ImageFormat;
 use reqwest::Client;
 use serenity::model::channel::Message;
+use tokio::process::Command;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::downloaders::loaderror::LoadResult;
-use crate::downloaders::mbyte_to_byte;
+use crate::downloaders::loaderror::{LoadError, LoadResult};
 use crate::downloaders::reddit::RedditFileUrl::{Image, Video};
+use crate::downloaders::{create_working_dir, mbyte_to_byte};
+use crate::handlers::WORKING_DIR;
 
 enum RedditFileUrl {
     Image(String),
@@ -41,18 +44,40 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<Pa
         .json::<serde_json::Value>()
         .await?;
 
-    //lets put an Uuid at the beginning of the filename to prevent filename conflicts
     let output_file_name = Uuid::new_v4().to_string();
 
-    let working_dir = canonicalize(temp_dir())?;
-    let output_file_name = match extraxt_file_url_from_reddit_response(&res) {
-        Ok(Image(url)) => {
-            let image = client.get(url).send().await?.bytes().await.unwrap();
+    let working_dir = WORKING_DIR.get_or_try_init(create_working_dir)?;
+    let output_file_name = match extract_file_url_from_reddit_response(&res) {
+        Ok(Image(image_url)) => {
+            let url = image_url.clone();
+            let image_file_extension = image_url.split(".").last().unwrap();
+            let image_bytes = client.get(url).send().await?.bytes().await.unwrap();
 
-            let path = output_file_name + ".webp";
-            File::create(working_dir.join(&path))?.write_all(&image)?;
+            //Because the default reddit image format is .webp we can just blindly save the Fle with the .webp extension
+            //This was not always the case, so maybe older reddit posts might crash here
+            let filename = output_file_name + "." + image_file_extension;
 
-            path
+            let path = working_dir.join(&filename);
+            File::create(&path)?.write_all(&image_bytes)?;
+
+            //We simply try to open the file as an Image, if it fails we wrote the Bytes of a text Post to the File
+            let Ok(_) = ImageReader::open(&path)?.decode() else {
+                return Err(LoadError::Ignore("This is a text post".into()));
+            };
+
+            let Ok(im) = ImageFormat::from_path(&path) else {
+                return Err(LoadError::Ignore("This is a text post".into()));
+            };
+
+            //Because gifs are so fucking huge we convert the gif to an mp4 file
+            let filename = match im {
+                ImageFormat::Gif => {
+                    return convert_gif_to_mp4(path).await;
+                }
+                _ => filename,
+            };
+
+            filename
         }
         Ok(Video(vid_url)) => {
             //Get Video and Audio Url
@@ -110,12 +135,9 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<Pa
                 .current_dir(&working_dir)
                 .spawn()?;
 
-            loop {
-                match handle.try_wait() {
-                    Ok(Some(_)) => break,
-                    Ok(None) => {}
-                    Err(err) => return Err(err.into()),
-                }
+            match handle.wait().await {
+                Ok(_) => {}
+                Err(err) => return Err(err.into()),
             }
 
             fs::remove_file(video_path)?;
@@ -132,10 +154,38 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<Pa
     Ok(working_dir.join(path))
 }
 
+async fn convert_gif_to_mp4(path: PathBuf) -> LoadResult<PathBuf> {
+    let new_filename = path
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .split(".")
+        .next()
+        .unwrap();
+    let new_filename = String::from(new_filename) + ".mp4";
+
+    let mut new_path = PathBuf::from(path.parent().unwrap());
+    new_path.push(new_filename);
+
+    let mut handle = Command::new("ffmpeg")
+        .args(["-i", path.to_str().unwrap(), new_path.to_str().unwrap()])
+        .current_dir(WORKING_DIR.get_or_try_init(create_working_dir)?)
+        .spawn()?;
+
+    match handle.wait().await {
+        Ok(_) => {}
+        Err(err) => return Err(err.into()),
+    }
+
+    Ok(new_path)
+}
+
 //This is super ugly and i am pretty sure there is a way better method of handling this.
 //The idea is to check for the video url and when none can be found look for the img url
-fn extraxt_file_url_from_reddit_response(json: &serde_json::Value) -> LoadResult<RedditFileUrl> {
-    Ok(extract_video_url(json).unwrap_or(extract_img_url(json)?))
+fn extract_file_url_from_reddit_response(json: &serde_json::Value) -> LoadResult<RedditFileUrl> {
+    let result = extract_video_url(json).unwrap_or(extract_img_url(json)?);
+    Ok(result)
 }
 
 /// Web scraping with rust is pure pain
@@ -252,5 +302,5 @@ mod test {
 
     fn test_reddit_text() {}
 
-    fn test_extract_image_url() {}
+    fn test_reddit_gif() {}
 }

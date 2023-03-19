@@ -1,12 +1,13 @@
 ## TODO:
 
-- Delete Pias posts or change them to noodle pics
+- Delete Pia´s posts or change them to noodle pics
 - Finish Docker Setup
-  - Configuration through docker conf
-  - deploayable Docker Container file
-  - put on to Container Registry
+    - Configuration through docker conf
+    - deployable Docker Container file
+    - put on to Container Registry
 - Implement Commands for Bot
-- Deploy: setup CI Pipeline on Github
+- Deploy: setup CI Pipeline on GitHub
+- Allow to pass a list of urls instead of only one
 
 Prod :
 

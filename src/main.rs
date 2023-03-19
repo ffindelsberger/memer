@@ -1,6 +1,7 @@
 #![feature(once_cell)]
 #![allow(warnings)]
 
+use std::collections::HashMap;
 use std::env::current_dir;
 use std::fs;
 
@@ -17,9 +18,8 @@ mod handlers;
 
 #[derive(Deserialize)]
 struct Config {
-    channels_listening: Vec<u64>,
+    channels_listening: HashMap<String, String>,
     debug: u64,
-    webhook: String,
     discord_token: String,
     max_filesize: u64,
     downloaders: Downloaders,
@@ -39,9 +39,6 @@ impl TypeMapKey for Config {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
-    //TODO: anstelle von einfach einem expect einen genauen Error ausgeben warum es sich hier um kein korrektes Toml handelt
-    // dafür gibt es sicher einen error type in dem toml crate
-
     //Parsing Toml File
     let config = {
         let config_file = fs::read("resources/properties.toml").expect(
@@ -52,11 +49,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
         toml::from_str::<Config>(config_file_utf8).expect("Error when parsing toml file:")
     };
 
+    //We have to transfer ownership of the logging guard to the main function, otherwise it will be dropped in the sub-function and we wont have a global logger anymore
     let _logging_guard = setup_logging();
 
-    MAX_FILE_SIZE
-        .set(config.max_filesize)
-        .expect("Paniced on Setting MAX_FILE_SIZE Constant");
+    //Setting up Static Values, maybe put in extra function in the future.
+    //It would be better if we init the WORKING_DIR in the dedicated functions, the way it is now i cant test
+    //the download functions independently because the WORKING_DIR is not initialized
+    {
+        MAX_FILE_SIZE
+            .set(config.max_filesize)
+            .expect("Panicked on Setting MAX_FILE_SIZE Constant");
+    }
+
     //Setup Client
     let mut client = {
         // Set gateway intents, which decides what events the bot will be notified about
@@ -88,7 +92,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
 }
 
 fn setup_logging() -> WorkerGuard {
-    let rolling_file = tracing_appender::rolling::daily(current_dir().unwrap(), "prefix.log");
+    let mut logging_dir = current_dir().unwrap();
+    logging_dir.push("log");
+
+    let rolling_file = tracing_appender::rolling::daily(logging_dir, "prefix.log");
     let (_non_blocking_stdout, _guard_stdout) = tracing_appender::non_blocking(std::io::stdout());
     let (file_appender, guard) = tracing_appender::non_blocking(rolling_file);
     tracing_subscriber::fmt().with_writer(file_appender).init();

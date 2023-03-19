@@ -1,14 +1,12 @@
-use serde_json::json;
 use serenity::async_trait;
-use serenity::http::Http;
 use serenity::model::channel::Message;
-use serenity::model::prelude::{Ready, Webhook};
+use serenity::model::prelude::Ready;
 use serenity::prelude::{Context, EventHandler};
 use tracing::{error, info, trace};
 
 use crate::downloaders::loaderror::LoadError;
 use crate::downloaders::{delete_file, UrlKind};
-use crate::handlers::send_debug_message;
+use crate::handlers::{send_debug_message, send_webhook_message};
 use crate::Config;
 
 pub struct AutomaticDownloader;
@@ -32,22 +30,32 @@ impl EventHandler for AutomaticDownloader {
             error!("No user found in context with message {} from {}", msg.id, msg.author);
             return;
         };
+
         if user.id == msg.author.id {
             return;
         }
 
-        info!("We got a message from {} - {}", msg.author, msg.content);
-        if !config.channels_listening.contains(msg.channel_id.as_u64()) {
+        //Before i changed the toml properties to a table(channel_id=webhookurl) i had a u64 for the channel_id in my config struct which was much nicer
+        //Now i have to do a heap allocation :( just to use the channel_id a String
+        let channel_id = msg.channel_id.to_string();
+        if !config.channels_listening.contains_key(channel_id.as_str()) {
             trace!(
                 "The message is not from the meme channel so we dont care about it, lets return"
             );
             return;
         }
 
+        info!(
+            "We got a message from {} with id : {} - {}",
+            msg.author, msg.id, msg.content
+        );
         //If something is embedded than we might have to do something if not ignore message and end
         if msg.embeds.is_empty() {
             info!("Nothing is embedded but maybe it did not load fast enough so lets make some extra checks");
-            if !(msg.content.contains("youtube") || msg.content.contains("reddit")) {
+            if !(msg.content.contains("youtube")
+                || msg.content.contains("youtu.be")
+                || msg.content.contains("reddit"))
+            {
                 println!(
                     "{} - Does not seem to be a url i can work with so we end",
                     msg.content
@@ -56,10 +64,6 @@ impl EventHandler for AutomaticDownloader {
             }
             info!("ok its a youtube or reddit link, lets investigate further");
         }
-
-        // First of all lets delete the Message.
-        // Even if we fail to convert the Message we dont want the embedded post in the channel
-        // but we will send a debug message into the bot channel to tell the user he needs to manually download his post
 
         let url = match msg.embeds.is_empty() {
             false => msg.embeds.get(0).unwrap().url.as_ref().unwrap(),
@@ -77,10 +81,12 @@ impl EventHandler for AutomaticDownloader {
                 }
             };
 
-            //The whole design with std::Error is flawed. At this point i cant distinguish between system errors or my custom error messages.
-            //Probably a costume error type/enum is the way to got but right now i am to lazy to refactor
             match url_kind.load(&msg, config.max_filesize).await {
                 Ok(path) => path,
+                Err(LoadError::Ignore(reason)) => {
+                    info!("Url {url} rejected. Reason: {reason}");
+                    return;
+                }
                 Err(LoadError::Rejected(message)) => {
                     info!("Url {url} rejected. Reason: {message}");
                     send_debug_message(&ctx, message.as_str(), config.debug, &msg.author).await;
@@ -125,27 +131,12 @@ impl EventHandler for AutomaticDownloader {
 
         //TODO: Could not send Webhook error handling
         //Sending the File to Webhook
-        {
-            let _payload_data = json!({
-                "name": msg.author,
-                "avatar":  msg.author.avatar_url().unwrap(),
-                "content": "youtube",
-            });
-
-            let http_webhook = Http::new("");
-            let webhook = Webhook::from_url(&http_webhook, &config.webhook)
-                .await
-                .expect("Replace the webhook with your own");
-
-            webhook
-                .execute(&http_webhook, false, |w| {
-                    w.username(&msg.author.name)
-                        .avatar_url(&msg.author.avatar_url().unwrap())
-                        .add_file(&downloaded_file_path)
-                })
-                .await
-                .expect("Could not execute webhook.");
-        }
+        send_webhook_message(
+            &msg,
+            config.channels_listening.get(channel_id.as_str()).unwrap(),
+            &downloaded_file_path,
+        )
+        .await;
 
         let _msg = msg.channel_id.send_message(&ctx.http, |m| {
             m.content(msg.author.name.to_string())

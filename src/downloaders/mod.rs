@@ -1,3 +1,4 @@
+use std::env::temp_dir;
 use std::fs;
 use std::path::PathBuf;
 
@@ -42,4 +43,15 @@ pub async fn delete_file(path: &PathBuf) {
             err
         ),
     }
+}
+
+fn create_working_dir() -> Result<PathBuf, std::io::Error> {
+    let mut working_dir = temp_dir();
+    working_dir.push("gamersbot_stuff");
+
+    match &working_dir.exists() {
+        true => {}
+        false => fs::create_dir(&working_dir)?,
+    }
+    Ok(working_dir)
 }
