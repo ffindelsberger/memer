@@ -2,10 +2,9 @@ use std::env::temp_dir;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::downloaders::loaderror::LoadResult;
 use serenity::model::channel::Message;
 use tracing::{error, info};
-
-use crate::downloaders::loaderror::LoadResult;
 
 pub mod loaderror;
 pub mod reddit;
