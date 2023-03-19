@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: Setup yt-dlp
+      uses: AnimMouse/setup-yt-dlp@v1
     - name: Setup FFmpeg
       uses: FedericoCarboni/setup-ffmpeg@v2
     - name: Install latest nightly
