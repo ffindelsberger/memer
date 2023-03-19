@@ -13,7 +13,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup yt-dlp
       uses: AnimMouse/setup-yt-dlp@v1
     - name: Setup FFmpeg
@@ -24,7 +24,6 @@ jobs:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
-    - uses: actions/checkout@v3
     - name: Build
       run: cargo build --verbose
     - name: Run tests
