@@ -13,7 +13,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout Repository
+      uses: actions/checkout@v3
     - name: Setup yt-dlp
       uses: AnimMouse/setup-yt-dlp@v1
     - name: Setup FFmpeg
