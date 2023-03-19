@@ -7,4 +7,4 @@ on:
 
 jobs:
   check:
-    uses: ffindelsberger/reusable-workflows/.github/workflows/rust-check.yaml@main
+    uses: ffindelsberger/reusable-workflows/.github/workflows/rust-check.yml@main
