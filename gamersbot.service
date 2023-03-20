@@ -3,11 +3,13 @@ Description=Gamers Bot Service
 After=network.target
 
 [Service]
-ExecStart=/opt/gamersbot/gamers_bot
+ExecStart=/opt/gamersbot_release/gamers_bot
 User=root
+WorkingDirectory=/opt/gamersbot_release
 Group=root
 Restart=always
 Type=simple
+Environment="RUST_LOG=gamers_bot=info"
 
 [Install]
 WantedBy=multi-user.target
