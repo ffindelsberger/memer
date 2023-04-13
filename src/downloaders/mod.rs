@@ -2,9 +2,10 @@ use std::env::temp_dir;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::downloaders::loaderror::LoadResult;
 use serenity::model::channel::Message;
 use tracing::{error, info};
+
+use crate::downloaders::loaderror::LoadResult;
 
 pub mod loaderror;
 pub mod reddit;
@@ -18,7 +19,7 @@ pub enum UrlKind {
 }
 
 impl UrlKind {
-    pub async fn load(&self, msg: &Message, max_filesize: u64) -> LoadResult<PathBuf> {
+    pub async fn load(&self, msg: &Message, max_filesize: u16) -> LoadResult<PathBuf> {
         match self {
             UrlKind::Reddit(url) => reddit::load(url, msg, max_filesize).await,
             UrlKind::Youtube(url) => youtube::load(url, msg, max_filesize).await,

@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 use std::env::current_dir;
-use std::fs;
 
 use serde::Deserialize;
 use serenity::prelude::*;
@@ -11,7 +10,6 @@ use tracing::info;
 use tracing_appender::non_blocking::WorkerGuard;
 
 use crate::handlers::automatic_handler::AutomaticDownloader;
-use crate::handlers::MAX_FILE_SIZE;
 
 mod downloaders;
 mod handlers;
@@ -21,7 +19,6 @@ struct Config {
     channels_listening: HashMap<String, String>,
     debug: u64,
     discord_token: String,
-    max_filesize: u64,
     downloaders: Downloaders,
 }
 
@@ -37,29 +34,38 @@ impl TypeMapKey for Config {
     type Value = Config;
 }
 
+static _CONFIG_FILE_LOCATION: &str = "/etc/opt/gamersbot";
+static CONFIG: &str = include_str!("../resources/properties.toml");
+const DISCORD_MAX_FILE_SIZE: u16 = 25;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     //Parsing Toml File
     let config = {
+        /*
         let config_file = fs::read("resources/properties.toml").expect(
             "No properties.toml file found in resources folder, please provide a properties file",
         );
         let config_file_utf8 = std::str::from_utf8(config_file.as_ref())
             .expect("Error when parsing properties.toml into Utf8: ");
-        toml::from_str::<Config>(config_file_utf8).expect("Error when parsing toml file:")
+         */
+        toml::from_str::<Config>(CONFIG).expect("Error when parsing toml file:")
     };
 
-    //We have to transfer ownership of the logging guard to the main function, otherwise it will be dropped in the sub-function and we wont have a global logger anymore
+    //We have to transfer ownership of the logging guard to the main function,
+    // otherwise it will be dropped in the sub-function and we wont have a global
+    // logger anymore
     let _logging_guard = setup_logging();
 
     //Setting up Static Values, maybe put in extra function in the future.
-    //It would be better if we init the WORKING_DIR in the dedicated functions, the way it is now i cant test
-    //the download functions independently because the WORKING_DIR is not initialized
-    {
-        MAX_FILE_SIZE
-            .set(config.max_filesize)
-            .expect("Panicked on Setting MAX_FILE_SIZE Constant");
-    }
+    //It would be better if we init the WORKING_DIR in the dedicated functions, the
+    // way it is now i cant test the download functions independently because
+    // the WORKING_DIR is not initialized
+    //{
+    //    MAX_FILE_SIZE
+    //        .set(config.max_filesize)
+    //        .expect("Panicked on Setting MAX_FILE_SIZE Constant");
+    //}
 
     //Setup Client
     let mut client = {
@@ -69,8 +75,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
             | GatewayIntents::MESSAGE_CONTENT;
 
         // Configure the client with your Discord bot token in the environment.
-        //let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+        //let token = env::var("DISCORD_TOKEN").expect("Expected a token in the
+        // environment");
         let token = &config.discord_token;
+
         // Create a new instance of the Client, logging in as a bot. This will
         // automatically prepend your bot token with "Bot ", which is a requirement
         // by Discord for bot users.
@@ -95,9 +103,11 @@ fn setup_logging() -> WorkerGuard {
     let mut logging_dir = current_dir().unwrap();
     logging_dir.push("log");
 
-    let rolling_file = tracing_appender::rolling::daily(logging_dir, "prefix.log");
+    let rolling_file = tracing_appender::rolling::daily(logging_dir, "gamersbot.log");
     let (_non_blocking_stdout, _guard_stdout) = tracing_appender::non_blocking(std::io::stdout());
     let (file_appender, guard) = tracing_appender::non_blocking(rolling_file);
-    tracing_subscriber::fmt().with_writer(file_appender).init();
-    guard
+    tracing_subscriber::fmt()
+        .with_writer(_non_blocking_stdout)
+        .init();
+    _guard_stdout
 }

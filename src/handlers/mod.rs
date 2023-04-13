@@ -11,7 +11,6 @@ use serenity::utils::MessageBuilder;
 
 pub mod automatic_handler;
 
-pub static MAX_FILE_SIZE: OnceLock<u64> = OnceLock::new();
 pub static WORKING_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 pub async fn send_debug_message(ctx: &Context, text: &str, channel_id: u64, user: &User) {

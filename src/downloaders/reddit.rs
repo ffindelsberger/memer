@@ -23,7 +23,7 @@ enum RedditFileUrl {
     Video(String),
 }
 
-pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<PathBuf> {
+pub async fn load(url: &str, _msg: &Message, max_filesize: u16) -> LoadResult<PathBuf> {
     let client = Client::new();
 
     let json_url = {
@@ -37,8 +37,13 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<Pa
         }
     };
 
-    let res = client.get(json_url)
-        .header("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36")
+    let res = client
+        .get(json_url)
+        .header(
+            "user-agent",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like \
+             Gecko) Chrome/108.0.0.0 Safari/537.36",
+        )
         .send()
         .await?
         .json::<serde_json::Value>()
@@ -47,37 +52,35 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<Pa
     let output_file_name = Uuid::new_v4().to_string();
 
     let working_dir = WORKING_DIR.get_or_try_init(create_working_dir)?;
-    let output_file_name = match extract_file_url_from_reddit_response(&res) {
+    let downloaded_file_path = match extract_file_url_from_reddit_response(&res) {
         Ok(Image(image_url)) => {
             let url = image_url.clone();
             let image_file_extension = image_url.split(".").last().unwrap();
             let image_bytes = client.get(url).send().await?.bytes().await.unwrap();
 
-            //Because the default reddit image format is .webp we can just blindly save the Fle with the .webp extension
-            //This was not always the case, so maybe older reddit posts might crash here
             let filename = output_file_name + "." + image_file_extension;
 
             let path = working_dir.join(&filename);
             File::create(&path)?.write_all(&image_bytes)?;
 
-            //We simply try to open the file as an Image, if it fails we wrote the Bytes of a text Post to the File
+            //We simply try to open the file as an Image, if it fails we wrote the Bytes of
+            // a text Post to the File
             let Ok(_) = ImageReader::open(&path)?.decode() else {
                 return Err(LoadError::Ignore("This is a text post".into()));
             };
-
-            let Ok(im) = ImageFormat::from_path(&path) else {
+            let Ok(format) = ImageFormat::from_path(&path) else {
                 return Err(LoadError::Ignore("This is a text post".into()));
             };
 
             //Because gifs are so fucking huge we convert the gif to an mp4 file
-            let filename = match im {
+            let filename = match format {
                 ImageFormat::Gif => {
                     return convert_gif_to_mp4(path).await;
                 }
                 _ => filename,
             };
 
-            filename
+            PathBuf::from(filename)
         }
         Ok(Video(vid_url)) => {
             //Get Video and Audio Url
@@ -92,13 +95,14 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<Pa
             //Download both files
             let vid = client.get(vid_url).send().await?;
 
-            //Check the content_length header to determine if we should event download the file or if it will be too large anyway
+            //Check the content_length header to determine if we should event download the
+            //file or if it will be too large anyway
             let size = vid
                 .content_length()
                 .ok_or("Failed to read Content_length Header from Reddit Download")?;
             info!("The Content_length header is {}", size);
 
-            if size > mbyte_to_byte(max_filesize) {
+            if size > mbyte_to_byte(max_filesize.into()) {
                 return Err(format!(
                     "Reddit File is over the Limit of {} Megabytes",
                     max_filesize
@@ -121,7 +125,7 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<Pa
             audio_file.write_all(audio.as_ref())?;
 
             //Combine audio and video track using ffmpeg
-            let output_file_name = output_file_name.add(".mp4");
+            let filename = output_file_name.add(".mp4");
             let mut handle = Command::new("ffmpeg")
                 .args([
                     "-i",
@@ -130,7 +134,7 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<Pa
                     audio_file_name.as_str(),
                     "-c",
                     "copy",
-                    output_file_name.as_str(),
+                    filename.as_str(),
                 ])
                 .current_dir(&working_dir)
                 .spawn()?;
@@ -143,15 +147,13 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u64) -> LoadResult<Pa
             fs::remove_file(video_path)?;
             fs::remove_file(audio_path)?;
 
-            output_file_name
+            PathBuf::from(filename)
         }
         Err(err) => {
             return Err(err);
         }
     };
-    let path = PathBuf::from(&output_file_name);
-
-    Ok(working_dir.join(path))
+    Ok(working_dir.join(downloaded_file_path))
 }
 
 async fn convert_gif_to_mp4(path: PathBuf) -> LoadResult<PathBuf> {
@@ -181,8 +183,9 @@ async fn convert_gif_to_mp4(path: PathBuf) -> LoadResult<PathBuf> {
     Ok(new_path)
 }
 
-//This is super ugly and i am pretty sure there is a way better method of handling this.
-//The idea is to check for the video url and when none can be found look for the img url
+//This is super ugly and i am pretty sure there is a way better method of
+// handling this. The idea is to check for the video url and when none can be
+// found look for the img url
 fn extract_file_url_from_reddit_response(json: &serde_json::Value) -> LoadResult<RedditFileUrl> {
     let result = extract_video_url(json).unwrap_or(extract_img_url(json)?);
     Ok(result)

@@ -7,7 +7,7 @@ use tracing::{error, info, trace};
 use crate::downloaders::loaderror::LoadError;
 use crate::downloaders::{delete_file, UrlKind};
 use crate::handlers::{send_debug_message, send_webhook_message};
-use crate::Config;
+use crate::{Config, DISCORD_MAX_FILE_SIZE};
 
 pub struct AutomaticDownloader;
 
@@ -35,8 +35,9 @@ impl EventHandler for AutomaticDownloader {
             return;
         }
 
-        //Before i changed the toml properties to a table(channel_id=webhookurl) i had a u64 for the channel_id in my config struct which was much nicer
-        //Now i have to do a heap allocation :( just to use the channel_id a String
+        //Before i changed the toml properties to a table(channel_id=webhookurl)
+        //i had a u64 for the channel_id in my config struct which was much nicer
+        //ow i have to do a heap allocation :( just to use the channel_id a String
         let channel_id = msg.channel_id.to_string();
         if !config.channels_listening.contains_key(channel_id.as_str()) {
             trace!(
@@ -81,7 +82,7 @@ impl EventHandler for AutomaticDownloader {
                 }
             };
 
-            match url_kind.load(&msg, config.max_filesize).await {
+            match url_kind.load(&msg, DISCORD_MAX_FILE_SIZE).await {
                 Ok(path) => path,
                 Err(LoadError::Ignore(reason)) => {
                     info!("Url {url} rejected. Reason: {reason}");
@@ -105,7 +106,8 @@ impl EventHandler for AutomaticDownloader {
         };
 
         // Validate that file can be sent:
-        // - No more than 8MB -> Calculate size in mb - We dont care about rounding down, as long as we get 7 we can send it to Discord
+        // - No more than 25MB -> Calculate size in mb - We dont care about rounding down,
+        // as long as we get 24 we can send it to Discord
         let size_in_mb = match downloaded_file_path.metadata() {
             Ok(metadata) => (metadata.len() / 1024) / 1024,
             Err(_) => {
@@ -118,10 +120,14 @@ impl EventHandler for AutomaticDownloader {
             }
         };
 
-        if size_in_mb >= 8 {
+        //TODO: Stupid into Conversion from u16 to u64 that is only needed cause i made the const a u16
+        if size_in_mb >= DISCORD_MAX_FILE_SIZE.into() {
             send_debug_message(
                 &ctx,
-                &format!("The File is {size_in_mb}MB large, limit is 8MB so i cant post it"),
+                &format!(
+                    "The File is {size_in_mb}MB large, limit is {}MB so i cant post it",
+                    DISCORD_MAX_FILE_SIZE
+                ),
                 config.debug,
                 &msg.author,
             )
