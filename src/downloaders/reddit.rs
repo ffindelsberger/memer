@@ -108,18 +108,14 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u16) -> LoadResult<Pa
                 .into());
             }
 
-            let vid = vid.bytes().await.unwrap();
+            let video = vid.bytes().await.unwrap();
             let audio = client.get(audio_url).send().await?.bytes().await?;
 
-            let video_file_name = Uuid::new_v4().to_string();
-            let audio_file_name = Uuid::new_v4().to_string();
             let video_path = working_dir.join(Uuid::new_v4().to_string());
             let audio_path = working_dir.join(Uuid::new_v4().to_string());
-
             let mut video_file = File::create(&video_path)?;
             let mut audio_file = File::create(&audio_path)?;
-
-            video_file.write_all(vid.as_ref())?;
+            video_file.write_all(video.as_ref())?;
             audio_file.write_all(audio.as_ref())?;
 
             //Combine audio and video track using ffmpeg
@@ -127,9 +123,9 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u16) -> LoadResult<Pa
             let mut handle = Command::new("ffmpeg")
                 .args([
                     "-i",
-                    video_file_name.as_str(),
+                    &Uuid::new_v4().to_string(),
                     "-i",
-                    audio_file_name.as_str(),
+                    &Uuid::new_v4().to_string(),
                     "-c",
                     "copy",
                     filename.as_str(),
