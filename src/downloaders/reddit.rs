@@ -49,8 +49,6 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u16) -> LoadResult<Pa
         .json::<serde_json::Value>()
         .await?;
 
-    let output_file_name = Uuid::new_v4().to_string();
-
     let working_dir = WORKING_DIR.get_or_try_init(create_working_dir)?;
     let downloaded_file_path = match extract_file_url_from_reddit_response(&res) {
         Ok(Image(image_url)) => {
@@ -58,7 +56,7 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u16) -> LoadResult<Pa
             let image_file_extension = image_url.split(".").last().unwrap();
             let image_bytes = client.get(url).send().await?.bytes().await.unwrap();
 
-            let filename = output_file_name + "." + image_file_extension;
+            let filename = Uuid::new_v4().to_string() + "." + image_file_extension;
 
             let path = working_dir.join(&filename);
             File::create(&path)?.write_all(&image_bytes)?;
@@ -115,8 +113,8 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u16) -> LoadResult<Pa
 
             let video_file_name = Uuid::new_v4().to_string();
             let audio_file_name = Uuid::new_v4().to_string();
-            let video_path = working_dir.join(&video_file_name);
-            let audio_path = working_dir.join(&audio_file_name);
+            let video_path = working_dir.join(Uuid::new_v4().to_string());
+            let audio_path = working_dir.join(Uuid::new_v4().to_string());
 
             let mut video_file = File::create(&video_path)?;
             let mut audio_file = File::create(&audio_path)?;
@@ -125,7 +123,7 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u16) -> LoadResult<Pa
             audio_file.write_all(audio.as_ref())?;
 
             //Combine audio and video track using ffmpeg
-            let filename = output_file_name.add(".mp4");
+            let filename = Uuid::new_v4().to_string().add(".mp4");
             let mut handle = Command::new("ffmpeg")
                 .args([
                     "-i",

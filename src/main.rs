@@ -36,7 +36,7 @@ impl TypeMapKey for Config {
 
 static _CONFIG_FILE_LOCATION: &str = "/etc/opt/gamersbot";
 static CONFIG: &str = include_str!("../resources/properties.toml");
-const DISCORD_MAX_FILE_SIZE: u16 = 25;
+const DISCORD_MAX_FILE_SIZE: u16 = 8;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
@@ -53,8 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     };
 
     //We have to transfer ownership of the logging guard to the main function,
-    // otherwise it will be dropped in the sub-function and we wont have a global
-    // logger anymore
+    //otherwise it will be dropped in the sub-function and we wont have a global
+    //logger anymore
     let _logging_guard = setup_logging();
 
     //Setting up Static Values, maybe put in extra function in the future.
