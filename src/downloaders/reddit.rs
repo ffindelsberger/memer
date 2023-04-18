@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::downloaders::loaderror::{LoadError, LoadResult};
 use crate::downloaders::reddit::RedditFileUrl::{Image, Video};
 use crate::downloaders::{create_working_dir, mbyte_to_byte};
-use crate::handlers::WORKING_DIR;
+use crate::handlers::TEMP_DIR;
 
 enum RedditFileUrl {
     Image(String),
@@ -49,7 +49,7 @@ pub async fn load(url: &str, _msg: &Message, max_filesize: u16) -> LoadResult<Pa
         .json::<serde_json::Value>()
         .await?;
 
-    let working_dir = WORKING_DIR.get_or_try_init(create_working_dir)?;
+    let working_dir = TEMP_DIR.get_or_try_init(create_working_dir)?;
     let downloaded_file_path = match extract_file_url_from_reddit_response(&res) {
         Ok(Image(image_url)) => {
             let url = image_url.clone();
@@ -166,7 +166,7 @@ async fn convert_gif_to_mp4(path: PathBuf) -> LoadResult<PathBuf> {
 
     let mut handle = Command::new("ffmpeg")
         .args(["-i", path.to_str().unwrap(), new_path.to_str().unwrap()])
-        .current_dir(WORKING_DIR.get_or_try_init(create_working_dir)?)
+        .current_dir(TEMP_DIR.get_or_try_init(create_working_dir)?)
         .spawn()?;
 
     match handle.wait().await {

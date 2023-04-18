@@ -12,7 +12,7 @@ use tracing::log::error;
 
 use crate::downloaders::create_working_dir;
 use crate::downloaders::loaderror::LoadResult;
-use crate::handlers::WORKING_DIR;
+use crate::handlers::TEMP_DIR;
 
 //#[cfg(target_os = "linux")]
 //const YT_DL: &str = "vendors/yt-dlp_linux";
@@ -56,7 +56,7 @@ async fn download_file(url: &str, filename: &str, max_filesize: u16) -> LoadResu
     // Because i am changing the working dir of the Child it does not find the
     // yt-dlp_macos binary so i made the path ot the program also canonical
     // There may be a way better method to solve this problem
-    let working_dir = WORKING_DIR.get_or_try_init(create_working_dir)?;
+    let temp_dir = TEMP_DIR.get_or_try_init(create_working_dir)?;
     let filename = f!("{}.mp4", filename);
     // r#" -S "res:720" -o {}  --max-filesize {}"#,
     // r#"-f "b[ext=mp4]" -S "filesize~7M" -o {}"#
@@ -76,7 +76,7 @@ async fn download_file(url: &str, filename: &str, max_filesize: u16) -> LoadResu
     let mut child_handle = Command::new("yt-dlp")
         .args(args)
         .stdout(Stdio::piped())
-        .current_dir(working_dir)
+        .current_dir(temp_dir)
         .spawn()?;
 
     //Ok so we need to use the Tokio Command module here, std::process::Command
@@ -100,7 +100,7 @@ async fn download_file(url: &str, filename: &str, max_filesize: u16) -> LoadResu
         Err(err) => return Err(err.into()),
     };
 
-    Ok(working_dir.join(filename))
+    Ok(temp_dir.join(filename))
 }
 
 #[cfg(test)]
