@@ -1,17 +1,22 @@
 #![feature(once_cell)]
+#![feature(once_cell_try)]
 #![allow(warnings)]
 
 use std::collections::HashMap;
 use std::env::current_dir;
 
-use serde::Deserialize;
-use serenity::prelude::*;
-use tracing::info;
-use tracing_appender::non_blocking::WorkerGuard;
-
 use crate::handlers::automatic_handler::AutomaticDownloader;
+use serde::Deserialize;
+use serenity::futures::SinkExt;
+use serenity::prelude::*;
+use tokio::fs;
+use tracing::info;
+use tracing::instrument::WithSubscriber;
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::fmt::writer::MakeWriterExt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{filter, fmt};
 
-mod downloaders;
 mod handlers;
 
 #[derive(Deserialize)]
@@ -35,21 +40,21 @@ impl TypeMapKey for Config {
 }
 
 static _CONFIG_FILE_LOCATION: &str = "/etc/opt/gamersbot";
-static CONFIG: &str = include_str!("../resources/properties.toml");
-const DISCORD_MAX_FILE_SIZE: u16 = 8;
+static CONFIG: &str = include_str!("../properties.toml");
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     //Parsing Toml File
     let config = {
         /*
-        let config_file = fs::read("resources/properties.toml").expect(
-            "No properties.toml file found in resources folder, please provide a properties file",
+        let config_file = fs::read("resources/properties.toml").await.expect(
+            "No properties.toml file found, please provide a properties file",
         );
-        let config_file_utf8 = std::str::from_utf8(config_file.as_ref())
-            .expect("Error when parsing properties.toml into Utf8: ");
          */
-        toml::from_str::<Config>(CONFIG).expect("Error when parsing toml file:")
+        let config_file_utf8 = std::str::from_utf8(CONFIG.as_bytes())
+            .expect("Error when parsing properties.toml into Utf8: ");
+
+        toml::from_str::<Config>(config_file_utf8).expect("Error when parsing toml file:")
     };
 
     //We have to transfer ownership of the logging guard to the main function,
@@ -99,15 +104,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     Ok(())
 }
 
+/// Returns the Logging Guard which has to be held in Scope to not Drop it, dropping the Logging
+/// Guard flushes the current events captures by the logger into the File and makes the Logger
+/// unavailable for the rest duration of the Program
 fn setup_logging() -> WorkerGuard {
-    let mut logging_dir = current_dir().unwrap();
+    let mut logging_dir =
+        current_dir().expect("Failed to aquire the current dir to be set as logging dir");
+
     logging_dir.push("log");
 
-    let rolling_file = tracing_appender::rolling::daily(logging_dir, "gamersbot.log");
-    let (_non_blocking_stdout, _guard_stdout) = tracing_appender::non_blocking(std::io::stdout());
-    let (file_appender, guard) = tracing_appender::non_blocking(rolling_file);
+    let rolling_file_appender = tracing_appender::rolling::daily(logging_dir, "gamersbot.log");
+    let (file_appender, guard) = tracing_appender::non_blocking(rolling_file_appender);
+    let stdout = std::io::stdout.with_max_level(tracing::Level::INFO);
     tracing_subscriber::fmt()
-        .with_writer(_non_blocking_stdout)
+        .with_writer(stdout.and(file_appender))
         .init();
-    _guard_stdout
+
+    guard
 }

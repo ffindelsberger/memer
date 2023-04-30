@@ -1,4 +1,4 @@
-use std::any::Any;
+
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -13,10 +13,9 @@ use tokio::process::Command;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::downloaders::loaderror::{LoadError, LoadResult};
-use crate::downloaders::reddit::RedditFileUrl::{Image, Video};
-use crate::downloaders::{create_working_dir, mbyte_to_byte};
-use crate::handlers::TEMP_DIR;
+use crate::loaderror::{LoadError, LoadResult};
+use crate::reddit::RedditFileUrl::{Image, Video};
+use crate::{create_working_dir, mbyte_to_byte, TEMP_DIR};
 
 enum RedditFileUrl {
     Image(String),

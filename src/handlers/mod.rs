@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -8,10 +9,10 @@ use serenity::model::id::ChannelId;
 use serenity::model::prelude::{User, Webhook};
 use serenity::prelude::Context;
 use serenity::utils::MessageBuilder;
+use tracing::error;
+use tracing::log::info;
 
 pub mod automatic_handler;
-
-pub static TEMP_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 pub async fn send_debug_message(ctx: &Context, text: &str, channel_id: u64, user: &User) {
     let response = MessageBuilder::new().push(text).mention(user).build();
@@ -38,4 +39,17 @@ async fn send_webhook_message(msg: &Message, webhook_url: &str, file_path: &Path
         })
         .await
         .expect("Could not execute webhook.");
+}
+
+pub async fn delete_file(path: &PathBuf) {
+    //I really dont know why but for some reason it puts a space before the filename so we include it here in the delete command
+    info!("Removing {}", path.display());
+    match fs::remove_file(path) {
+        Ok(_) => {}
+        Err(err) => error!(
+            "Error deleting file after uploading it to discord : {} with error : {} ",
+            path.to_string_lossy(),
+            err
+        ),
+    }
 }

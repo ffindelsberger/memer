@@ -1,2 +1,3 @@
+#Static linking for openSSL library with musdl c-stdlib
 [target.x86_64-unknown-linux-musl]
 linker = "x86_64-linux-musl-gcc"

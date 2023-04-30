@@ -4,10 +4,12 @@ use serenity::model::prelude::Ready;
 use serenity::prelude::{Context, EventHandler};
 use tracing::{error, info, trace};
 
-use crate::downloaders::loaderror::LoadError;
-use crate::downloaders::{delete_file, UrlKind};
-use crate::handlers::{send_debug_message, send_webhook_message};
-use crate::{Config, DISCORD_MAX_FILE_SIZE};
+use crate::handlers::{delete_file, send_debug_message, send_webhook_message};
+use crate::Config;
+use format as f;
+use social_loaders::loaderror::LoadError;
+//use social_loaders::UrlKind;
+use social_loaders::{UrlKind, DISCORD_MAX_FILE_SIZE_MB};
 
 pub struct AutomaticDownloader;
 
@@ -39,7 +41,7 @@ impl EventHandler for AutomaticDownloader {
         //i had a u64 for the channel_id in my config struct which was much nicer
         //ow i have to do a heap allocation :( just to use the channel_id a String
         let channel_id = msg.channel_id.to_string();
-        if !config.channels_listening.contains_key(channel_id.as_str()) {
+        if !config.channels_listening.contains_key(&channel_id) {
             trace!(
                 "The message is not from the meme channel so we dont care about it, lets return"
             );
@@ -57,8 +59,8 @@ impl EventHandler for AutomaticDownloader {
                 || msg.content.contains("youtu.be")
                 || msg.content.contains("reddit"))
             {
-                println!(
-                    "{} - Does not seem to be a url i can work with so we end",
+                info!(
+                    "Message content: {} - Does not seem to be a url i can work with so we end",
                     msg.content
                 );
                 return;
@@ -82,7 +84,7 @@ impl EventHandler for AutomaticDownloader {
                 }
             };
 
-            match url_kind.load(&msg, DISCORD_MAX_FILE_SIZE).await {
+            match url_kind.load(&msg, DISCORD_MAX_FILE_SIZE_MB).await {
                 Ok(path) => path,
                 Err(LoadError::Ignore(reason)) => {
                     info!("Url {url} rejected. Reason: {reason}");
@@ -90,16 +92,18 @@ impl EventHandler for AutomaticDownloader {
                 }
                 Err(LoadError::Rejected(message)) => {
                     info!("Url {url} rejected. Reason: {message}");
-                    send_debug_message(&ctx, message.as_str(), config.debug, &msg.author).await;
+                    send_debug_message(&ctx, &message, config.debug, &msg.author).await;
                     return;
                 }
                 Err(LoadError::Error(e)) => {
                     error!("Trying to load file from url {url} resulted in err: {e}");
-                    let message = format!(
+                    let message = f!(
                         "Internal System Error: User: {} MessageID: {} Url: {}",
-                        msg.author, msg.id, url
+                        msg.author,
+                        msg.id,
+                        url
                     );
-                    send_debug_message(&ctx, message.as_str(), config.debug, &msg.author).await;
+                    send_debug_message(&ctx, &message, config.debug, &msg.author).await;
                     return;
                 }
             }
@@ -121,32 +125,31 @@ impl EventHandler for AutomaticDownloader {
         };
 
         //TODO: Stupid into Conversion from u16 to u64 that is only needed cause i made the const a u16
-        if size_in_mb >= DISCORD_MAX_FILE_SIZE.into() {
+        if size_in_mb >= DISCORD_MAX_FILE_SIZE_MB.into() {
             send_debug_message(
                 &ctx,
-                &format!(
+                &f!(
                     "The File is {size_in_mb}MB large, limit is {}MB so i cant post it",
-                    DISCORD_MAX_FILE_SIZE
+                    DISCORD_MAX_FILE_SIZE_MB
                 ),
                 config.debug,
                 &msg.author,
             )
             .await;
             return;
-        }
+        };
 
         //TODO: Could not send Webhook error handling
         //Sending the File to Webhook
         send_webhook_message(
             &msg,
-            config.channels_listening.get(channel_id.as_str()).unwrap(),
+            config.channels_listening.get(&channel_id).unwrap(),
             &downloaded_file_path,
         )
         .await;
 
         let _msg = msg.channel_id.send_message(&ctx.http, |m| {
-            m.content(msg.author.name.to_string())
-                .add_file(&downloaded_file_path)
+            m.content(&msg.author.name).add_file(&downloaded_file_path)
         });
 
         let _ = msg.delete(&ctx.http).await;

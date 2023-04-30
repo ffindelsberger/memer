@@ -4,6 +4,7 @@ After=network.target
 
 [Service]
 ExecStart=/opt/gamersbot_release/gamers_bot
+#You probably should not use root as the user for running the service
 User=root
 WorkingDirectory=/opt/gamersbot_release
 Group=root

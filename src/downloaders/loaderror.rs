@@ -5,7 +5,7 @@ use std::path::StripPrefixError;
 pub type LoadResult<T> = Result<T, LoadError>;
 
 /// Ignore : Thanks to reddit´s stupid api design they store the post url in the same attribute as the images so have this variant
-///         to signal that we do not want to send the file to that was created to discord
+///         to signal that we do not want to send the file that was created to discord
 /// Rejected: We have a valid image or video but it cant be sent do discord foe i.E. filesize restrictions
 #[derive(Debug)]
 pub enum LoadError {
@@ -13,6 +13,8 @@ pub enum LoadError {
     Rejected(String),
     Error(Box<dyn Error + Send + Sync>),
 }
+
+impl Error for LoadError {}
 
 impl Display for LoadError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
