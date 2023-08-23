@@ -1,17 +1,24 @@
 use serenity::async_trait;
 use serenity::model::channel::Message;
-use serenity::model::prelude::Ready;
+use serenity::model::prelude::{Channel, Mention, Ready, User};
 use serenity::prelude::{Context, EventHandler};
 use tracing::{error, info, trace};
+use url::Url;
 
 use crate::handlers::{delete_file, send_debug_message, send_webhook_message};
 use crate::Config;
 use format as f;
 use social_loaders::loaderror::LoadError;
-//use social_loaders::UrlKind;
 use social_loaders::{UrlKind, DISCORD_MAX_FILE_SIZE_MB};
 
 pub struct AutomaticDownloader;
+
+pub struct Task {
+    sender: User,
+    channel: Channel,
+    mentions: Vec<Mention>,
+    url: Vec<Url>,
+}
 
 #[async_trait]
 impl EventHandler for AutomaticDownloader {
@@ -28,12 +35,12 @@ impl EventHandler for AutomaticDownloader {
             .expect("Expected Config struct in ContextData");
 
         //If the bot is the author of the user we end here
-        let Ok(user) = ctx.http.get_current_user().await else {
+        let Ok(bot) = ctx.http.get_current_user().await else {
             error!("No user found in context with message {} from {}", msg.id, msg.author);
             return;
         };
 
-        if user.id == msg.author.id {
+        if bot.id == msg.author.id {
             return;
         }
 
@@ -52,6 +59,11 @@ impl EventHandler for AutomaticDownloader {
             "We got a message from {} with id : {} - {}",
             msg.author, msg.id, msg.content
         );
+
+        for x in msg.content.lines() {
+            let parsed = Url::parse(x);
+        }
+
         //If something is embedded than we might have to do something if not ignore message and end
         if msg.embeds.is_empty() {
             info!("Nothing is embedded but maybe it did not load fast enough so lets make some extra checks");

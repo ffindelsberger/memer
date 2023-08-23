@@ -30,7 +30,6 @@ async fn send_webhook_message(msg: &Message, webhook_url: &str, file_path: &Path
     let webhook = Webhook::from_url(&http_webhook, webhook_url)
         .await
         .expect("Replace the webhook with your own");
-
     webhook
         .execute(&http_webhook, false, |w| {
             w.username(&msg.author.name)

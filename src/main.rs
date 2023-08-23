@@ -40,7 +40,7 @@ impl TypeMapKey for Config {
 }
 
 static _CONFIG_FILE_LOCATION: &str = "/etc/opt/gamersbot";
-static CONFIG: &str = include_str!("../properties.toml");
+static CONFIG: &str = include_str!("../properties_test.toml");
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
